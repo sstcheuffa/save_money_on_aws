@@ -1,0 +1,32 @@
+- name: grab info for running instances
+  amazon.aws.ec2_instance_info:
+    region: "{{ ec2_region }}"
+    filters:
+      instance-state-name: running
+  register: ec2_node_info
+
+- name: set the untagged to a var
+  set fact:
+    untagged_instances: "{{ ec2_node_info.instances | 
+    selectattr('tags', 'equalto', {}) | map(attribute='instance_id') | list }}"
+
+- name: set the missing owner tag to a var
+  set_fact:state:
+    missing_owner_tag: "{{ ec2_node_info.instances |
+    selectattr('tags.owner', 'undefined') | 
+    map(attribute='instance_id') | list}}"
+
+- name: Terminate every untagged runing instance in a region
+  amazon.aws.ec2:
+    region: "{{ ec2_region }}"
+    state: absent
+    instance_ids: "{{ untagged_instances }}"
+  when: untagged_instances | length > 0
+
+- name: Terminate every instance without an owner tag
+  amazon.aws.ec2:
+    region: "{{ ec2_region }}"
+    state: absent
+    instance_ids: "{{ missing_owner_tag }}"
+  when: missing_owner_tag | length > 0
+
